@@ -15,13 +15,13 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 ### A replication of IV analyses from study:
 
-#### Stokes (2015): *"Electoral Backlash against Climate Policy: A Natural Experiment on Retrospective Voting and Local Resistance to Public Policy*. 
+#### Stokes (2015): *"Electoral Backlash against Climate Policy: A Natural Experiment on Retrospective Voting and Local Resistance to Public Policy*.
 
-- **Study:** [https://doi.org/10.1111/ajps.12220](https://onlinelibrary.wiley.com/doi/full/10.1111/ajps.12220)
-- **Data source:** [Dataverse-Stokes2015](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SDUGCC)
+-   **Study:** [https://doi.org/10.1111/ajps.12220](https://onlinelibrary.wiley.com/doi/full/10.1111/ajps.12220)
+-   **Data source:** [Dataverse-Stokes2015](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SDUGCC)
 
 ::: callout
-`NOTE:` Replication of IV results is approximate. An alternative matching procedure was followed in this class exercise for illustration purposes. 
+`NOTE:` Replication of IV results is approximate. An alternative matching procedure was followed in this class exercise for illustration purposes.
 :::
 
 ------------------------------------------------------------------------
@@ -50,6 +50,8 @@ library(DiagrammeR) # Path diagrams
 ```{r}
 clean_data <- read_csv(here("data", "stokes15_ivdata.csv")) %>%
   mutate(across(c(precinct_id, district_id), as.factor))
+
+## when you want to do something over multiple areas, good to use across, its easy
 ```
 
 ------------------------------------------------------------------------
@@ -62,28 +64,34 @@ clean_data <- read_csv(here("data", "stokes15_ivdata.csv")) %>%
 
 clean_data %>%
     select(proposed_turbine_3km, log_home_val_07, p_uni_degree, log_median_inc, log_pop_denc) %>%
+    tbl_summary(
+        by = proposed_turbine_3km,
+        statistic = list(all_continuous() ~ "{mean} ({sd})") 
+    ) %>% 
+    modify_header(label ~ "**Variable**") %>% 
+    modify_spanning_header(c("stat_1", "stat_2") ~ "**Treatment**")
 
 
 ```
 
 ------------------------------------------------------------------------
 
-### What type of data do I need for matching? 
+### What type of data do I need for matching?
 
-a. Multiple covariates/controls (wide data)
-b. Extra control observations (large comparison group)
+a.  Multiple covariates/controls (wide data)
+b.  Extra control observations (large comparison group)
 
 ::: callout-tip
-Be cautious when choosing controls to avoid accidentally controlling away the treatment effect! 
+Be cautious when choosing controls to avoid accidentally controlling away the treatment effect!
 :::
 
 ------------------------------------------------------------------------
 
 **The rationale for matching as described in Stokes, 2015:**
 
-> "Using matching to preprocess the data before using an instrumental variable estimator may strengthen the instrument and correct for biases from confounders if the instrument departs from as-if random assignment (Keele and Morgan 2013). \
-[...] \
-Mahalanobis distance matching was first used to pair each treated unit with a control unit based on observable characteristics. The data were balanced on four variables: the average home price pretreatment in 2006 (log), the population with a university degree (%), median income (log), and population density (log)." 
+> "Using matching to preprocess the data before using an instrumental variable estimator may strengthen the instrument and correct for biases from confounders if the instrument departs from as-if random assignment (Keele and Morgan 2013).\
+> \[...\]\
+> Mahalanobis distance matching was first used to pair each treated unit with a control unit based on observable characteristics. The data were balanced on four variables: the average home price pretreatment in 2006 (log), the population with a university degree (%), median income (log), and population density (log)."
 
 ------------------------------------------------------------------------
 
@@ -91,11 +99,11 @@ Mahalanobis distance matching was first used to pair each treated unit with a co
 
 📜 [Documentation - MatchIt](https://kosukeimai.github.io/MatchIt/)
 
-- Approximate Mahalanobis matching method used in Stokes (2015)
-- Introduce another very common matching approach called `propensity score matching`
+-   Approximate Mahalanobis matching method used in Stokes (2015)
+-   Introduce another very common matching approach called `propensity score matching`
 
 ::: callout
-`NOTE`: In the replication code associated with Stokes (2015) the {`AER`} package is used for Mahalanobis matching. In this tutorial we utilize the {`MatchIt`} package for this class exercise. The results are comparable but not exactly the same. 
+`NOTE`: In the replication code associated with Stokes (2015) the {`AER`} package is used for Mahalanobis matching. In this tutorial we utilize the {`MatchIt`} package for this class exercise. The results are comparable but not exactly the same.
 :::
 
 ------------------------------------------------------------------------
@@ -103,7 +111,15 @@ Mahalanobis distance matching was first used to pair each treated unit with a co
 ```{r}
 set.seed(02252025)
 
-match_model <- 
+match_model <- matchit(
+    proposed_turbine_3km ~ 
+        log_home_val_07 + p_uni_degree + log_median_inc + log_pop_denc, #covariate
+    data = clean_data,
+    method = "nearest",
+    distance = "mahalanobis",
+    ratio = 1, # 1 to 1 matching 
+    replace = FALSE # without replacement 
+)
 
 # Extract matched data
 matched_data <- match.data(match_model)
@@ -114,15 +130,14 @@ matched_data <- match.data(match_model)
 summary(match_model)
 ```
 
-
 ------------------------------------------------------------------------
 
 ### ❤️ ️Create a "love plot" using `love.plot()`
 
 📜 [Documentation - cobalt](https://ngreifer.github.io/cobalt/)
 
-- Plot mean differences for data before & after matching across all pre-treatment covariates
-- This is an effectives way to evaluate pre-treatment balance!
+-   Plot mean differences for data before & after matching across all pre-treatment covariates
+-   This is an effectives way to evaluate pre-treatment balance!
 
 ------------------------------------------------------------------------
 
@@ -133,18 +148,30 @@ new_names <- data.frame(
     new = c("Home Value (log)", "Percent University Degree", "Median Income (log)", "Population Density (log)"))
 
 # Love plot
-
+love.plot(
+    match_model, stats = "mean.diffs",
+    thresholds = c(m = 0.1),
+    var.names = new_names
+)
 
 ```
 
 ------------------------------------------------------------------------
 
-### Propensity score matching 
+### Propensity score matching
 
 ------------------------------------------------------------------------
 
 ```{r}
-propensity_scores <- 
+propensity_scores <- matchit(
+    proposed_turbine_3km ~ 
+        log_home_val_07 + p_uni_degree + log_median_inc + log_pop_denc, #covariate
+    data = clean_data,
+    method = "nearest",
+    distance = "logit",
+    ratio = 1, # 1 to 1 matching 
+    replace = FALSE # without replacement 
+)
     
 ```
 
@@ -156,7 +183,8 @@ propensity_scores <-
 
 ```{r}
 
-
+bal.tab(propensity_scores,
+        var.names = new_names)
 ```
 
 ------------------------------------------------------------------------
@@ -165,15 +193,21 @@ propensity_scores <-
 
 **Covariates**:
 
-- Hair color: Black, Brown, Blonde, Red
-- Eye color: Brown, Blue, Green, Hazel
-- Handedness: Right-handed, Left-handed
+-   Hair color: Black, Brown, Blonde, Red
+
+-   Eye color: Brown, Blue, Green, Hazel
+
+-   Handedness: Right-handed, Left-handed
 
     An 'exact' match = Someone who is matching on all 3 covariates. Find your closest match!
+
+Matching is model based vs design based because it is based on the data that we have. It is a model based type of inference. Skeptical of only using this procedure to counteract omitted variable bias.
 
 ------------------------------------------------------------------------
 
 ### Instrumental Variable Estimation: Two-Stage Least Squares (2SLS)
+
+First stage we use an LM model. Second stage we use information from the first stage and run another LM model.
 
 #### First stage: Regress the treatment ($X$) on the instrument ($Z$)
 
@@ -195,16 +229,17 @@ $$Y_i = \beta_0 + \beta_1 \hat{X}_i + \epsilon_i$$
 
 ------------------------------------------------------------------------
 
-### The 2SLS step-wise procedure 
+### The 2SLS step-wise procedure
+
+Instrument variable is WindPower.
 
 #### Step 1. Estimate the first stage regression equation
 
-$$ProposedTurbine_i = \beta_0 + \beta_1 WindPower_i + ControlVariables... + \epsilon_i$$
-#### Control variables included in 1st & 2nd stage regressions:
+$$ProposedTurbine_i = \beta_0 + \beta_1 WindPower_i + ControlVariables... + \epsilon_i$$ \#### Control variables included in 1st & 2nd stage regressions:
 
-- Distance to lakes 
-- District fixed effects
-- Flexible geographic controls
+-   Distance to lakes
+-   District fixed effects
+-   Flexible geographic controls
 
 > "Geographic controls, in both the first and second stage, included longitude, latitude, both variables squared, and their interaction." (Stokes, 2015).
 
@@ -215,10 +250,17 @@ $$ProposedTurbine_i = \beta_0 + \beta_1 WindPower_i + ControlVariables... + \eps
 # mindistlake + mindistlake_sq + longitude + long_sq + latitude + lat_sq + long_lat + district_id 
 
 first_stage <-
+    lm(
+        proposed_turbine_3km ~ 
+            log_wind_power +
+            mindistlake + mindistlake_sq +
+            longitude + long_sq + latitude + lat_sq + long_lat +
+            district_id,
+        data = matched_data
+    )
     
-    
+summary(first_stage)    
 ```
-
 
 ```{r}
 export_summs(first_stage, digits = 3,  model.names = c("First stage: Prpoposed Turbine 3km"),
@@ -237,7 +279,7 @@ General rule of thumb: `F-statistic > 10` is considered a relevant instrument (S
 
 ------------------------------------------------------------------------
 
-#### Step 2. Save predicted values $\hat{X}_i$ from first stage 
+#### Step 2. Save predicted values $\hat{X}_i$ from first stage
 
 ------------------------------------------------------------------------
 
@@ -249,7 +291,7 @@ matched_data$proposed_turbine_3km_HAT <- predict(first_stage, newdata = matched_
 
 ------------------------------------------------------------------------
 
-#### Step 3. Estimate the second stage regression 
+#### Step 3. Estimate the second stage regression
 
 $$LiberalVoteShare_i = \beta_0 + \beta_1 \widehat{ProposedTurbine}_i + ControlVariables... +  \epsilon_i$$
 
@@ -259,10 +301,16 @@ $$LiberalVoteShare_i = \beta_0 + \beta_1 \widehat{ProposedTurbine}_i + ControlVa
 # CONTROLS:
 # mindistlake + mindistlake_sq + longitude + long_sq + latitude + lat_sq + long_lat + district_id 
 
-second_stage <- 
+second_stage <-   lm(
+        change_liberal ~ 
+            proposed_turbine_3km_HAT +
+            mindistlake + mindistlake_sq +
+            longitude + long_sq + latitude + lat_sq + long_lat +
+            district_id,
+        data = matched_data
+    )
     
 ```
-
 
 ```{r}
 export_summs(second_stage, digits = 3,  model.names = c("Second stage: Change in Liberal Vote Share"),
@@ -271,24 +319,26 @@ export_summs(second_stage, digits = 3,  model.names = c("Second stage: Change in
 
 ------------------------------------------------------------------------
 
-### *Local Average Treatment Effect (LATE)* 
+### *Local Average Treatment Effect (LATE)*
 
 #### The treatment effect for the `complier group` 🎟️ → 🍕
 
-- Recall that the 2SLS estimator estimates the *LATE* 
-- Given that all of the identifying assumptions hold: 
-    
-    1. `Instrument relevance` ( the instrument is strong 💪 )
-    2. `Exclusion assumption` (  No Z on Y except through X ⛔️ )
-    3. `Ignorability` ( Z is 'as if random' with respect to Y 🎲 )
-    4. `Monotonicity` ( No `defiers` 🙃 )
-    
-- Asssuming 1-4 2SLS  will consistently return the *LATE* (i.e., the treatment effect among compliers)
-- `Compliers` = Participants who were encouraged by the instrument (🎟) to take the treatment (🍕)
+-   Recall that the 2SLS estimator estimates the *LATE*
+
+-   Given that all of the identifying assumptions hold:
+
+    1.  `Instrument relevance` ( the instrument is strong 💪 )
+    2.  `Exclusion assumption` ( No Z on Y except through X ⛔️ )
+    3.  `Ignorability` ( Z is 'as if random' with respect to Y 🎲 )
+    4.  `Monotonicity` ( No `defiers` 🙃 )
+
+-   Asssuming 1-4 2SLS will consistently return the *LATE* (i.e., the treatment effect among compliers)
+
+-   `Compliers` = Participants who were encouraged by the instrument (🎟) to take the treatment (🍕)
 
 ------------------------------------------------------------------------
 
-### Illustrate the `exclusion assumption` using {`DiagrammeR`} 
+### Illustrate the `exclusion assumption` using {`DiagrammeR`}
 
 📜 [Documentation - DiagrammeR](https://rich-iannone.github.io/DiagrammeR/)
 
@@ -319,10 +369,9 @@ grViz("
 ")
 ```
 
-![](figures/y-x-z-diagram.png)
-------------------------------------------------------------------------
+## ![](figures/y-x-z-diagram.png)
 
-### Estimate 2SLS using `ivreg()` from {`AER`} 
+### Estimate 2SLS using `ivreg()` from {`AER`}
 
 📜 [Documentation - AER](https://cran.r-project.org/web/packages/AER/vignettes/AER.pdf)
 
@@ -337,7 +386,6 @@ Syntax for specify 2SLS using `ivreg()`:
 fit_2sls <-
     
 ```
-
 
 ```{r}
 
@@ -355,6 +403,3 @@ praise("${EXCLAMATION}! 🚀 Great work 241 - You are ${adjective}! 💫")
 
 say("The End", "duck")
 ```
-
-
-
