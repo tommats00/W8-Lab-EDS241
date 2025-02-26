@@ -1,0 +1,360 @@
+---
+title: "🌬️🍃 Week 8 Lab: Matching & Instrumental Variable Estimation "
+author: "EDS 241"
+format:
+  html:
+    theme: sketchy
+date: "February 25, 2025"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+------------------------------------------------------------------------
+
+### A replication of IV analyses from study:
+
+#### Stokes (2015): *"Electoral Backlash against Climate Policy: A Natural Experiment on Retrospective Voting and Local Resistance to Public Policy*. 
+
+- **Study:** [https://doi.org/10.1111/ajps.12220](https://onlinelibrary.wiley.com/doi/full/10.1111/ajps.12220)
+- **Data source:** [Dataverse-Stokes2015](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SDUGCC)
+
+::: callout
+`NOTE:` Replication of IV results is approximate. An alternative matching procedure was followed in this class exercise for illustration purposes. 
+:::
+
+------------------------------------------------------------------------
+
+### Setup - Load libraries & data
+
+------------------------------------------------------------------------
+
+```{r}
+
+library(tidyverse)
+library(janitor)
+library(here)         
+library(gt)
+library(gtsummary)
+library(jtools) 
+library(AER)        # 2SLS
+library(MatchIt)    # Matching
+library(cobalt)     # Balance & love plots
+library(DiagrammeR) # Path diagrams
+
+```
+
+------------------------------------------------------------------------
+
+```{r}
+clean_data <- read_csv(here("data", "stokes15_ivdata.csv")) %>%
+  mutate(across(c(precinct_id, district_id), as.factor))
+```
+
+------------------------------------------------------------------------
+
+### Intuition check - Why match?
+
+------------------------------------------------------------------------
+
+```{r}
+
+clean_data %>%
+    select(proposed_turbine_3km, log_home_val_07, p_uni_degree, log_median_inc, log_pop_denc) %>%
+
+
+```
+
+------------------------------------------------------------------------
+
+### What type of data do I need for matching? 
+
+a. Multiple covariates/controls (wide data)
+b. Extra control observations (large comparison group)
+
+::: callout-tip
+Be cautious when choosing controls to avoid accidentally controlling away the treatment effect! 
+:::
+
+------------------------------------------------------------------------
+
+**The rationale for matching as described in Stokes, 2015:**
+
+> "Using matching to preprocess the data before using an instrumental variable estimator may strengthen the instrument and correct for biases from confounders if the instrument departs from as-if random assignment (Keele and Morgan 2013). \
+[...] \
+Mahalanobis distance matching was first used to pair each treated unit with a control unit based on observable characteristics. The data were balanced on four variables: the average home price pretreatment in 2006 (log), the population with a university degree (%), median income (log), and population density (log)." 
+
+------------------------------------------------------------------------
+
+### Conduct matching estimation using the {`MatchIt`} 📦
+
+📜 [Documentation - MatchIt](https://kosukeimai.github.io/MatchIt/)
+
+- Approximate Mahalanobis matching method used in Stokes (2015)
+- Introduce another very common matching approach called `propensity score matching`
+
+::: callout
+`NOTE`: In the replication code associated with Stokes (2015) the {`AER`} package is used for Mahalanobis matching. In this tutorial we utilize the {`MatchIt`} package for this class exercise. The results are comparable but not exactly the same. 
+:::
+
+------------------------------------------------------------------------
+
+```{r}
+set.seed(02252025)
+
+match_model <- 
+
+# Extract matched data
+matched_data <- match.data(match_model)
+
+```
+
+```{r, eval=FALSE}
+summary(match_model)
+```
+
+
+------------------------------------------------------------------------
+
+### ❤️ ️Create a "love plot" using `love.plot()`
+
+📜 [Documentation - cobalt](https://ngreifer.github.io/cobalt/)
+
+- Plot mean differences for data before & after matching across all pre-treatment covariates
+- This is an effectives way to evaluate pre-treatment balance!
+
+------------------------------------------------------------------------
+
+```{r}
+
+new_names <- data.frame(
+    old = c("log_home_val_07", "p_uni_degree", "log_median_inc", "log_pop_denc"),
+    new = c("Home Value (log)", "Percent University Degree", "Median Income (log)", "Population Density (log)"))
+
+# Love plot
+
+
+```
+
+------------------------------------------------------------------------
+
+### Propensity score matching 
+
+------------------------------------------------------------------------
+
+```{r}
+propensity_scores <- 
+    
+```
+
+------------------------------------------------------------------------
+
+### Create table displaying covariate balance using `cobalt::bal.tab()`
+
+------------------------------------------------------------------------
+
+```{r}
+
+
+```
+
+------------------------------------------------------------------------
+
+### Simulate matching in 241 - Find your counterfactual!
+
+**Covariates**:
+
+- Hair color: Black, Brown, Blonde, Red
+- Eye color: Brown, Blue, Green, Hazel
+- Handedness: Right-handed, Left-handed
+
+    An 'exact' match = Someone who is matching on all 3 covariates. Find your closest match!
+
+------------------------------------------------------------------------
+
+### Instrumental Variable Estimation: Two-Stage Least Squares (2SLS)
+
+#### First stage: Regress the treatment ($X$) on the instrument ($Z$)
+
+$$X_i = \alpha_0 + \alpha_1 Z_i + \mu_i$$
+
+#### Fitted regression notation: ($\hat{X}_i$) indicates predicted values (i.e., `hat` $\widehat{symbol}$)
+
+$$\hat{X}_i = \hat{\alpha_0} + \hat{\alpha_1} Z_i$$
+
+#### Second stage: Regress the outcome ($Y$) on the fitted values from the 1st stage ($\hat{X}_i$)
+
+$$Y_i = \beta_0 + \beta_1 \hat{X}_i + \epsilon_i$$
+
+------------------------------------------------------------------------
+
+### Replicating IV estimator in Stokes (2015) - "Table 2"
+
+![](figures/table2-Stokes15.png)
+
+------------------------------------------------------------------------
+
+### The 2SLS step-wise procedure 
+
+#### Step 1. Estimate the first stage regression equation
+
+$$ProposedTurbine_i = \beta_0 + \beta_1 WindPower_i + ControlVariables... + \epsilon_i$$
+#### Control variables included in 1st & 2nd stage regressions:
+
+- Distance to lakes 
+- District fixed effects
+- Flexible geographic controls
+
+> "Geographic controls, in both the first and second stage, included longitude, latitude, both variables squared, and their interaction." (Stokes, 2015).
+
+------------------------------------------------------------------------
+
+```{r}
+# CONTROLS:
+# mindistlake + mindistlake_sq + longitude + long_sq + latitude + lat_sq + long_lat + district_id 
+
+first_stage <-
+    
+    
+```
+
+
+```{r}
+export_summs(first_stage, digits = 3,  model.names = c("First stage: Prpoposed Turbine 3km"),
+             coefs = c("(Intercept)", "log_wind_power") ) 
+```
+
+#### Check 1st stage for `relevance` - to make sure your instrument is not weak 🤕
+
+General rule of thumb: `F-statistic > 10` is considered a relevant instrument (Stock, Wright, & Yogo, 2020)
+
+```{r}
+# `summary(first_stage)` # Includes the F-statistic at the bottom of long output table
+
+
+```
+
+------------------------------------------------------------------------
+
+#### Step 2. Save predicted values $\hat{X}_i$ from first stage 
+
+------------------------------------------------------------------------
+
+```{r}
+
+matched_data$proposed_turbine_3km_HAT <- predict(first_stage, newdata = matched_data)
+
+```
+
+------------------------------------------------------------------------
+
+#### Step 3. Estimate the second stage regression 
+
+$$LiberalVoteShare_i = \beta_0 + \beta_1 \widehat{ProposedTurbine}_i + ControlVariables... +  \epsilon_i$$
+
+------------------------------------------------------------------------
+
+```{r}
+# CONTROLS:
+# mindistlake + mindistlake_sq + longitude + long_sq + latitude + lat_sq + long_lat + district_id 
+
+second_stage <- 
+    
+```
+
+
+```{r}
+export_summs(second_stage, digits = 3,  model.names = c("Second stage: Change in Liberal Vote Share"),
+             coefs = c("(Intercept)", "proposed_turbine_3km_HAT") ) 
+```
+
+------------------------------------------------------------------------
+
+### *Local Average Treatment Effect (LATE)* 
+
+#### The treatment effect for the `complier group` 🎟️ → 🍕
+
+- Recall that the 2SLS estimator estimates the *LATE* 
+- Given that all of the identifying assumptions hold: 
+    
+    1. `Instrument relevance` ( the instrument is strong 💪 )
+    2. `Exclusion assumption` (  No Z on Y except through X ⛔️ )
+    3. `Ignorability` ( Z is 'as if random' with respect to Y 🎲 )
+    4. `Monotonicity` ( No `defiers` 🙃 )
+    
+- Asssuming 1-4 2SLS  will consistently return the *LATE* (i.e., the treatment effect among compliers)
+- `Compliers` = Participants who were encouraged by the instrument (🎟) to take the treatment (🍕)
+
+------------------------------------------------------------------------
+
+### Illustrate the `exclusion assumption` using {`DiagrammeR`} 
+
+📜 [Documentation - DiagrammeR](https://rich-iannone.github.io/DiagrammeR/)
+
+------------------------------------------------------------------------
+
+```{r, eval=FALSE}
+grViz("
+  digraph path_diagram {
+    # Graph layout settings
+    rankdir = LR;  # Left-to-right layout
+
+    # Node definitions
+    node [shape = ellipse, style = filled, fillcolor = AquaMarine]
+    Y_LiberalVoteShare [label = 'Y - Liberal Vote Share']
+    
+    node [shape = ellipse, style = filled, fillcolor = PaleGreen]
+    X_ProposedTurbine [label = 'X - Proposed Turbine']
+    
+    node [shape = ellipse, style = filled, fillcolor = CornFlowerBlue]
+    Z_WindPower [label = 'Z - Wind Power']
+
+    # Reversed Edges (Directed Arrows)
+    X_ProposedTurbine -> Z_WindPower [dir = back] 
+    Y_LiberalVoteShare -> X_ProposedTurbine  [dir = back]
+    Y_LiberalVoteShare -> Z_WindPower [label = 'No effect (exclusion assumption)',
+    fontsize=10, style = dashed, color = gray, constraint = false, dir = back]
+  }
+")
+```
+
+![](figures/y-x-z-diagram.png)
+------------------------------------------------------------------------
+
+### Estimate 2SLS using `ivreg()` from {`AER`} 
+
+📜 [Documentation - AER](https://cran.r-project.org/web/packages/AER/vignettes/AER.pdf)
+
+Syntax for specify 2SLS using `ivreg()`:
+
+`ivreg( Y ~ X | Z , data )`
+
+------------------------------------------------------------------------
+
+```{r}
+
+fit_2sls <-
+    
+```
+
+
+```{r}
+
+summary(fit_2sls)
+
+```
+
+------------------------------------------------------------------------
+
+```{r, message=TRUE, echo=FALSE}
+
+library(praise); library(cowsay)
+
+praise("${EXCLAMATION}! 🚀 Great work 241 - You are ${adjective}! 💫")
+
+say("The End", "duck")
+```
+
+
+
